@@ -15,6 +15,9 @@ from sklearn.preprocessing import LabelEncoder
 from collections import Counter
 le = LabelEncoder()
 
+from matplotlib import rcParams
+rcParams.update({'figure.autolayout': True})
+
 # Load pandas
 import pandas as pd
 
@@ -99,6 +102,8 @@ y_train = y_train_under
 
 """
 
+
+
 ### Undersample Majority Class - Near Miss
 """
 from imblearn.under_sampling import NearMiss
@@ -115,6 +120,7 @@ print('After',counter)
 X_train = X_train_under
 y_train = y_train_under
 """
+
 
 
 ### Undersample Majority Class - Nearest Neighbour
