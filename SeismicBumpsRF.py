@@ -5,13 +5,6 @@ Created on Mon Nov  8 21:54:14 2021
 @author: Danylo
 """
 
-# -*- coding: utf-8 -*-
-"""
-Created on Sat Oct 30 21:56:11 2021
-
-@author: Danylo
-"""
-
 """ Script to test Random Forest Classification on Seismic Bumps Data"""
 
 ### Setup
@@ -19,6 +12,7 @@ Created on Sat Oct 30 21:56:11 2021
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
+from collections import Counter
 le = LabelEncoder()
 
 # Load pandas
@@ -67,12 +61,85 @@ print('Number of observations in the test data:',len(test))
 features = df.columns[:18]
 y  = train.iloc[:,18].values
 
+X_train = train[features]
+y_train = train_labels
+
+### Resample minority class using SMOTE
+"""
+# sudo pip install imbalanced-learn
+from imblearn.over_sampling import SMOTE
+
+counter = Counter(y_train)
+print('Before',counter)
+ratio = 1.0
+smt=SMOTE(random_state=random_state, sampling_strategy=ratio,k_neighbors=9)
+X_train_sm, y_train_sm = smt.fit_resample(X_train, y_train)
+counter = Counter(y_train_sm)
+print('After',counter)
+
+X_train = X_train_sm
+y_train = y_train_sm
+
+"""
+
+
+
+### Undersample Majority Class - Random
+"""
+from imblearn.under_sampling import RandomUnderSampler
+counter = Counter(y_train)
+print('Before',counter)
+undersample = RandomUnderSampler(sampling_strategy='majority')
+X_train_under, y_train_under = undersample.fit_resample(X_train, y_train)
+counter = Counter(y_train_under)
+print('After',counter)
+
+X_train = X_train_under
+y_train = y_train_under
+
+"""
+
+### Undersample Majority Class - Near Miss
+"""
+from imblearn.under_sampling import NearMiss
+
+counter = Counter(y_train)
+print('Before',counter)
+
+undersample = NearMiss(version=1, n_neighbors=3)
+X_train_under, y_train_under = undersample.fit_resample(X_train, y_train)
+
+counter = Counter(y_train_under)
+print('After',counter)
+
+X_train = X_train_under
+y_train = y_train_under
+"""
+
+
+### Undersample Majority Class - Nearest Neighbour
+from imblearn.under_sampling import CondensedNearestNeighbour
+
+counter = Counter(y_train)
+print('Before',counter)
+
+undersample = CondensedNearestNeighbour(n_neighbors=1)
+X_train_under, y_train_under = undersample.fit_resample(X_train, y_train)
+
+counter = Counter(y_train_under)
+print('After',counter)
+
+X_train = X_train_under
+y_train = y_train_under
+
+
+
 ### Create Model
 # Create a random forest Classifier
 clf = RandomForestClassifier(n_estimators=50, 
                                max_features = 'sqrt',
                                n_jobs=-1, verbose = 1)
-clf.fit(train[features], y)
+clf.fit(X_train, y_train)
 clf.predict(test[features])
 
 # See probabilities of first few test samples
@@ -90,14 +157,14 @@ test['class'].head()
 pd.crosstab(test['class'], preds, rownames=['Actual Class'], colnames=['Predicted Class'])
 
 # View a list of the features and their importance scores
-list(zip(train[features], clf.feature_importances_))
+list(zip(X_train, clf.feature_importances_))
+
 
 
 ### Extra Stats
 # Fit on training data
 model = clf
-modelresults = model.fit(train[features], train_labels)
-
+modelresults = model.fit(X_train, y_train)
 
 n_nodes = []
 max_depths = []
@@ -111,8 +178,8 @@ print(f'Average number of nodes {int(np.mean(n_nodes))}')
 print(f'Average maximum depth {int(np.mean(max_depths))}')
 
 # Training predictions (to demonstrate overfitting)
-train_rf_predictions = model.predict(train[features])
-train_rf_probs = model.predict_proba(train[features])[:, 1]
+train_rf_predictions = model.predict(X_train)
+train_rf_probs = model.predict_proba(X_train)[:, 1]
 
 # Testing predictions (to determine performance)
 rf_predictions = model.predict(test[features])
@@ -125,60 +192,15 @@ import matplotlib.pyplot as plt
 plt.style.use('fivethirtyeight')
 plt.rcParams['font.size'] = 18
 
-"""
-def evaluate_model(predictions, probs, train_predictions, train_probs):
-    #Compare machine learning model to baseline performance.
-    #Computes statistics and shows ROC curve.
-    
-    baseline = {}
-    
-    baseline['recall'] = recall_score(test_labels, 
-                                     [1 for _ in range(len(test_labels))])
-    baseline['precision'] = precision_score(test_labels, 
-                                      [1 for _ in range(len(test_labels))])
-    baseline['roc'] = 0.5
-    
-    results = {}
-    
-    results['recall'] = recall_score(test_labels, predictions)
-    results['precision'] = precision_score(test_labels, predictions)
-    results['roc'] = roc_auc_score(test_labels, probs)
-    
-    train_results = {}
-    train_results['recall'] = recall_score(train_labels, train_predictions)
-    train_results['precision'] = precision_score(train_labels, train_predictions)
-    train_results['roc'] = roc_auc_score(train_labels, train_probs)
-    
-    for metric in ['recall', 'precision', 'roc']:
-        print(f'{metric.capitalize()} Baseline: {round(baseline[metric], 2)} Test: {round(results[metric], 2)} Train: {round(train_results[metric], 2)}')
-    
-    # Calculate false positive rates and true positive rates
-    base_fpr, base_tpr, _ = roc_curve(test_labels, [1 for _ in range(len(test_labels))])
-    model_fpr, model_tpr, _ = roc_curve(test_labels, probs)
-
-    plt.figure(figsize = (8, 6))
-    plt.rcParams['font.size'] = 16
-    
-    # Plot both curves
-    plt.plot(base_fpr, base_tpr, 'b', label = 'baseline')
-    plt.plot(model_fpr, model_tpr, 'r', label = 'model')
-    plt.legend();
-    plt.xlabel('False Positive Rate'); 
-    plt.ylabel('True Positive Rate'); plt.title('ROC Curves');
-    plt.show();
-
-evaluate_model(rf_predictions, rf_probs, train_rf_predictions, train_rf_probs)
-plt.savefig('roc_auc_curve.png')
-"""
 
 
 ### plot ROC Curve for single class
 import sklearn.metrics as metrics
 # calculate the fpr and tpr for all thresholds of the classification
 
-X_train = train[features]
+#X_train = X_train
 X_test = test[features]
-y_train = train_labels
+#y_train = y_train
 y_test = test_labels
 
 probs = model.predict_proba(X_test)
@@ -196,16 +218,15 @@ plt.xlim([0, 1])
 plt.ylim([0, 1])
 plt.ylabel('True Positive Rate')
 plt.xlabel('False Positive Rate')
-plt.show()
-
 plt.savefig('RF_ROCCurve.png')
 
+plt.show()
 
 
 
 
-"""
 ### Plot ROC Curve for multiclass
+"""
 import numpy as np
 import matplotlib.pyplot as plt
 from itertools import cycle
@@ -391,7 +412,27 @@ def plot_confusion_matrix(cm, classes,
 # Confusion matrix
 cm = confusion_matrix(test_labels, rf_predictions)
 plot_confusion_matrix(cm, classes = target_names,
-                      title = 'Land Types Confusion Matrix')
+                      title = 'Seismic Bumps Confusion Matrix')
 
 plt.savefig('RF_ConfusionMatrix.png')
+
+
+
+### Plot Precision-Recall Curve
+from sklearn.metrics import PrecisionRecallDisplay
+
+#y_score = clf.decision_function(X_test)
+y_score = clf.predict_proba(test[features])
+y_score = y_score[:,1]
+
+disp = PrecisionRecallDisplay.from_predictions(y_test, y_score, name="Random Forest")
+#disp.plot()
+plt.title('Precision Recall Curve')
+plt.xlim([0,1])
+plt.ylim([0,1])
+plt.legend(loc = 'upper right')
+# plt.legend(loc = 'lower right')
+
+plt.savefig('RF_PrecisionRecallCurve.png')
+plt.show()
 
