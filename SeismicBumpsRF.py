@@ -153,7 +153,7 @@ clf.predict_proba(test[features])[0:10]
 
 # Create actual english names for the land types for each predicted land type
 preds = target_names[clf.predict(test[features])]
-# View the PREDICTED species for the first five observations
+# View the PREDICTED land types for the first five observations
 preds[0:5]
 
 # View the ACTUAL species for the first five observations
